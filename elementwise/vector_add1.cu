@@ -55,23 +55,32 @@ int main()
     //将host数据拷贝给device数据
     cudaCheck(cudaMemcpy(da, ha, N * sizeof(float), cudaMemcpyHostToDevice));
     cudaCheck(cudaMemcpy(db, hb, N * sizeof(float), cudaMemcpyHostToDevice));
-
     //调用kernel函数
     vector_add<<<GRID_SIZE, BLOCK_SIZE>>>(da, db, dc, N);
 
     //最终把device的结果拷贝回host，然后在host上比较数据大小
     cudaCheck(cudaMemcpy(hc, dc, N * sizeof(float), cudaMemcpyDeviceToHost));
 
-    vector_add_cpu(ha, hb, hc, N);
+    float* hc_cpu = (float*)malloc(N * sizeof(float));
+
+    vector_add_cpu(ha, hb, hc_cpu, N);
 
     for (int i = 0; i < N; ++i) {
-        if (hc[i] != hc[i]) {
+        if (abs(hc_cpu[i] - hc[i]) > 1e-6) {
             printf("error at index %d\n", i);
             break;
         }
     }
 
     printf("test passed\n");
+
+    free(ha);
+    free(hb);
+    free(hc);
+    free(hc_cpu);
+    cudaFree(da);
+    cudaFree(db);
+    cudaFree(dc);
 
     return 0;
 }
