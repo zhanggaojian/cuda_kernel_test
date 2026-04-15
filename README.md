@@ -1,9 +1,15 @@
 # cuda_kernel_test
 
-# compile
-```nvcc test.cu -o test```
+## compile
 
-# nsys easy
+```bash
+nvcc test.cu -o test
+```
+
+## nsys easy
+
+```bash
 nsys_easy -t cuda,osrt -s none -c none -o nsys_easy -r cuda_gpu_sum ./test
+```
 
-# ncu
+## ncu
