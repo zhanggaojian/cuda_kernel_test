@@ -32,7 +32,7 @@ int main()
 {
     float *ha, *hb, *hc;
     float *da, *db, *dc;
-    constexpr int N = 1024; //总共有N个元素值
+    constexpr int N = 10000000; //总共有N个元素值
     constexpr int BLOCK_SIZE = 256; //thread nums every block
     constexpr int GRID_SIZE = CEIL(N, BLOCK_SIZE); // block nums
 
