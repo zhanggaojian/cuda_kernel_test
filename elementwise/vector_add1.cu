@@ -16,8 +16,8 @@ __global__ void vector_add(float* a, float* b, float* c,  int n)
 {
     //全局thread id
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n) {
-        c[idx] = a[idx] + b[idx];
+    for (int i = idx; i < n; i += blockDim.x * gridDim.x) {
+        c[i] = a[i] + b[i];
     }
 }
 
