@@ -13,20 +13,20 @@ void _cudaCheck(cudaError_t err, const char* file, int line)
     return;
 }
 
-__global__ void vector_add_float(float* da, float* db, float* dc, int n)
+__global__ void vector_add_float4(float* da, float* db, float* dc, int n)
 {
     //global tid
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     for (int i = idx; i < n/4; i += gridDim.x * blockDim.x) {
-        float4 ta = *reinterpret_cast<float4*>(&da[i]);
-        float4 tb = *reinterpret_cast<float4*>(&db[i]);
-        float4 tc = *reinterpret_cast<float4*>(&dc[i]);
+        float4 ta = reinterpret_cast<float4*>(da)[i];
+        float4 tb = reinterpret_cast<float4*>(db)[i];
+        float4 tc = reinterpret_cast<float4*>(dc)[i];
         tc.x = ta.x + tb.x;
         tc.y = ta.y + tb.y;
         tc.z = ta.z + tb.z;
         tc.w = ta.w + tb.w;
-        *reinterpret_cast<float4*>(&dc[i]) = tc;
+        reinterpret_cast<float4*>(dc)[i] = tc;
     }
 }
 
@@ -52,7 +52,18 @@ int main()
     cudaCheck(cudaMemcpy(da, ha, N * sizeof(float), cudaMemcpyHostToDevice));
     cudaCheck(cudaMemcpy(db, hb, N * sizeof(float), cudaMemcpyHostToDevice));
 
+    cudaEvent_t start,stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
+
     vector_add_float4<<<GRID_SIZE, BLOCK_SIZE>>>(da, db, dc, N);
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    float time;
+    cudaEventElapsedTime(&time, start, stop);
+    printf("time: %f ms\n", time);
 
     float* hc_gpu = (float*)malloc(N * sizeof(float));
     cudaCheck(cudaMemcpy(hc_gpu, dc, N * sizeof(float), cudaMemcpyDeviceToHost));

@@ -55,8 +55,17 @@ int main()
     //将host数据拷贝给device数据
     cudaCheck(cudaMemcpy(da, ha, N * sizeof(float), cudaMemcpyHostToDevice));
     cudaCheck(cudaMemcpy(db, hb, N * sizeof(float), cudaMemcpyHostToDevice));
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
     //调用kernel函数
     vector_add<<<GRID_SIZE, BLOCK_SIZE>>>(da, db, dc, N);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    float time;
+    cudaEventElapsedTime(&time, start, stop);
+    printf("time: %f ms\n", time);
 
     //最终把device的结果拷贝回host，然后在host上比较数据大小
     cudaCheck(cudaMemcpy(hc, dc, N * sizeof(float), cudaMemcpyDeviceToHost));
