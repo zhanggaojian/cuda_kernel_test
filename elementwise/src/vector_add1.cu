@@ -74,14 +74,19 @@ int main()
 
     vector_add_cpu(ha, hb, hc_cpu, N);
 
+    bool passed = true;
     for (int i = 0; i < N; ++i) {
         if (abs(hc_cpu[i] - hc[i]) > 1e-6) {
             printf("error at index %d\n", i);
+            passed = false;
             break;
         }
     }
-
-    printf("test passed\n");
+    if (passed) {
+        printf("test passed\n");
+    } else {
+        printf("test failed\n");
+    }
 
     free(ha);
     free(hb);

@@ -42,6 +42,9 @@ int main()
     hs_cpu = (float*)malloc(N * sizeof(float));
     cudaCheck(cudaMalloc((void**)&da, N * sizeof(float)));
     cudaCheck(cudaMalloc((void**)&ds, N * sizeof(float)));
+    for (int i = 0; i < N; ++i) {
+        ha[i] = i;
+    }
     cudaCheck(cudaMemcpy(da, ha, N * sizeof(float), cudaMemcpyHostToDevice));
     constexpr int BLOCK_SIZE = 256;
     int GRID_SIZE = CEIL(N, BLOCK_SIZE);

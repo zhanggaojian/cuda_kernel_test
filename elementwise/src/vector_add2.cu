@@ -21,7 +21,7 @@ __global__ void vector_add_float4(float* da, float* db, float* dc, int n)
     for (int i = idx; i < n/4; i += gridDim.x * blockDim.x) {
         float4 ta = reinterpret_cast<float4*>(da)[i];
         float4 tb = reinterpret_cast<float4*>(db)[i];
-        float4 tc = reinterpret_cast<float4*>(dc)[i];
+        float4 tc;
         tc.x = ta.x + tb.x;
         tc.y = ta.y + tb.y;
         tc.z = ta.z + tb.z;
@@ -67,15 +67,19 @@ int main()
 
     float* hc_gpu = (float*)malloc(N * sizeof(float));
     cudaCheck(cudaMemcpy(hc_gpu, dc, N * sizeof(float), cudaMemcpyDeviceToHost));
-
+    bool passed = true;
     for (int i = 0; i < N; ++i) {
         if (abs(hc_gpu[i] - hc[i]) > 1e-6) {
             printf("error at index %d\n", i);
+            passed = false;
             break;
         }
     }
-
-    printf("test passed\n");
+    if (passed) {
+        printf("test passed\n");
+    } else {
+        printf("test failed\n");
+    }
     free(ha);
     free(hb);
     free(hc);
