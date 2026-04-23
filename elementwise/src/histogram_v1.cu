@@ -37,7 +37,10 @@ int main()
 {
     constexpr int N = 1000000;
     constexpr int BLOCK_SIZE = 256;
-    int GRID_SIZE = CEIL(N, BLOCK_SIZE);
+    cudaSetDevice(0);
+    cudaDeviceProp deviceProp;
+    cudaGetDeviceProperties(&deviceProp, 0);
+    int GRID_SIZE = std::min(CEIL(N, BLOCK_SIZE), deviceProp.maxGridSize[0]);
     int *ha = (int*)malloc(N * sizeof(int));
     int *hb = (int*)malloc(N * sizeof(int));
     int *da;
@@ -46,7 +49,7 @@ int main()
     cudaMalloc((void**)&db, N *sizeof(int));
     //init data
     for (int i = 0; i < N; ++i) {
-        ha[i] = rand() % N;
+        ha[i] = rand() % BLOCK_SIZE;
     }
     cudaMemcpy(da, ha, N *sizeof(int), cudaMemcpyHostToDevice);
     histogram_cpu(ha, hb, N);
