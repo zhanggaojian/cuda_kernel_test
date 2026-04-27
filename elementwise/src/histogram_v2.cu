@@ -15,10 +15,10 @@ __global__ void histogram_v2(int *da, int *db, int n)
 {
     int gtid = blockIdx.x * blockDim.x + threadIdx.x;
     int tid = threadIdx.x; //只是当前block内的线程id
+    __shared__ int shm[blockSize]; //每个block分配一个shared memory
     for (int i = tid; i < blockSize; i += blockDim.x) {
         shm[i] = 0;
     }
-    __shared__ int shm[blockSize]; //每个block分配一个shared memory
     shm[tid] = 0; // 只是针对当前block内的线程，去初始化对应的shared memory
     __syncthreads(); //同步当前block内的所有线程
     for (int i = gtid; i < n; i += blockDim.x * gridDim.x) {
@@ -54,7 +54,7 @@ int main()
     cudaSetDevice(0);
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, 0);
-    int GRID_SIZE = std::min(CEIL(N, BLOCK_SIZE), deviceProp.msxGridSize[0]);
+    int GRID_SIZE = std::min(CEIL(N, BLOCK_SIZE), deviceProp.maxGridSize[0]);
     int *ha, *hb;
     int *da, *db;
     ha = (int*)malloc(N * sizeof(int));
@@ -64,8 +64,18 @@ int main()
     for (int i = 0; i < N; ++i) {
         ha[i] = rand() % BLOCK_SIZE;
     }
+    histogram_cpu(ha, hb, N);
     cudaMemcpy(da, ha, N * sizeof(int), cudaMemcpyHostToDevice);
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
     histogram_v2<BLOCK_SIZE><<<GRID_SIZE, BLOCK_SIZE>>>(da, db, N);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    float time;
+    cudaEventElapsedTime(&time, start, stop);
+    printf("time %f\n", time);
     int *db_cpu = (int *)malloc(N * sizeof(int));
     cudaMemcpy(db_cpu, db, N * sizeof(int), cudaMemcpyDeviceToHost);
     if (check_result(hb, db_cpu, N)) {

@@ -35,7 +35,7 @@ bool check_result(int *hb, int *db_cpu, int n)
 
 int main()
 {
-    constexpr int N = 1000000;
+    constexpr int N = 10000000;
     constexpr int BLOCK_SIZE = 256;
     cudaSetDevice(0);
     cudaDeviceProp deviceProp;
@@ -53,7 +53,16 @@ int main()
     }
     cudaMemcpy(da, ha, N *sizeof(int), cudaMemcpyHostToDevice);
     histogram_cpu(ha, hb, N);
+    float time;
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
     histogram_v1<<<GRID_SIZE, BLOCK_SIZE>>>(da, db, N);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    printf("cuda exec time %f\n", time);
     int *db_cpu = (int*)malloc(N * sizeof(int));
     cudaMemcpy(db_cpu, db, N * sizeof(int), cudaMemcpyDeviceToHost);
     if(check_result(hb, db_cpu, N)) {
