@@ -21,7 +21,7 @@ __global__ void histogram_v2(int *da, int *db, int n)
     }
     shm[tid] = 0; // 只是针对当前block内的线程，去初始化对应的shared memory
     __syncthreads(); //同步当前block内的所有线程
-    for (int i = gtid; i < n; i += blockDim.x * gridDim.x) {
+    for (int i = gtid; i < n; i += blockDim.x * gridDim.x) { //这里的循环是在取数组的所有数据
         int val = da[i]; // 从global memory中取出当前线程gtid对应的元素值
         atomicAdd(&shm[val], 1); //shm[tid]是当前block内的线程对应的元素，给它加1
     }
