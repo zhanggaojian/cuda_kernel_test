@@ -25,10 +25,11 @@ bool check_result(double hin, float *din, int n)
     return true;
 }
 
-template<int warpSize>
+template<int blockSize, int warpSize>
 __global__ void sum_v3(float *din, float *dout, int n)
 {
-    __shared__ float shm[warpSize];
+    constexpr int WARP_NUMS = blockSize / warpSize;
+    __shared__ float shm[WARP_NUMS];
     int gtid = blockIdx.x * blockDim.x + threadIdx.x;
     int tid = threadIdx.x;
     int warpId = tid / warpSize;  // warp id in block
@@ -51,7 +52,8 @@ __global__ void sum_v3(float *din, float *dout, int n)
         for (int i = warpSize >> 1; i > 0; i >>= 1) {
             val += __shfl_down_sync(0xffffffff, val, i);
         }
-        dout[blockIdx.x] = val;
+        if (laneId == 0)
+            dout[blockIdx.x] = val;
     }
 }
 
@@ -108,7 +110,7 @@ int main()
     double *sum_host = (double*)malloc(sizeof(double));
     memset(sum_host, 0, sizeof(double));
     sum_cpu(hin, sum_host, N);
-    sum_v3<WARP_SIZE><<<grid_size, block_size>>>(din, dout, N);
+    sum_v3<BLOCK_SIZE, WARP_SIZE><<<grid_size, block_size>>>(din, dout, N);
     float *dout_cpu = (float*)malloc(GRID_SIZE * sizeof(float));
     cudaMemcpy(dout_cpu, dout, GRID_SIZE * sizeof(float), cudaMemcpyDeviceToHost);
 
@@ -118,7 +120,7 @@ int main()
         printf("test failed!\n");
     }
 
-    auto sum_v3_kernel = [&](){sum_v3<WARP_SIZE><<<grid_size, block_size>>>(din, dout, N);};
+    auto sum_v3_kernel = [&](){sum_v3<BLOCK_SIZE, WARP_SIZE><<<grid_size, block_size>>>(din, dout, N);};
     float time = benchmark_kernel(sum_v3_kernel, 5, 3);
     printf("time=%f\n", time);
     cudaFree(din);
