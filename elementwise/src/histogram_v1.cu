@@ -33,6 +33,28 @@ bool check_result(int *hb, int *db_cpu, int n)
     return true;
 }
 
+template<typename T>
+float benchmark_kernel(T func, int repeats, int warmup=1)
+{
+    float time = 0.0f;
+    for (int i = 0;i < warmup; ++i) {
+        func();
+    }
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
+    for (int i = 0; i < repeats; ++i) {
+        func();
+    }
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+    return time/repeats;
+}
+
 int main()
 {
     constexpr int N = 10000000;
@@ -53,16 +75,7 @@ int main()
     }
     cudaMemcpy(da, ha, N *sizeof(int), cudaMemcpyHostToDevice);
     histogram_cpu(ha, hb, N);
-    float time;
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start);
     histogram_v1<<<GRID_SIZE, BLOCK_SIZE>>>(da, db, N);
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&time, start, stop);
-    printf("cuda exec time %f\n", time);
     int *db_cpu = (int*)malloc(N * sizeof(int));
     cudaMemcpy(db_cpu, db, N * sizeof(int), cudaMemcpyDeviceToHost);
     if(check_result(hb, db_cpu, N)) {
@@ -70,6 +83,10 @@ int main()
     } else {
         printf("check result failed\n");
     }
+
+    auto histogram_v1_kernel = [&](){histogram_v1<<<GRID_SIZE, BLOCK_SIZE>>>(da, db, N);};
+    float time = benchmark_kernel(histogram_v1_kernel, 5, 3);
+    printf("time=%f\n", time);
     cudaFree(da);
     cudaFree(db);
     free(ha);

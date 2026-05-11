@@ -30,13 +30,35 @@ __global__ void vector_add_float4(float* da, float* db, float* dc, int n)
     }
 }
 
+template<typename T>
+float benchmark_kernel(T func, int repeats, int warmup=1)
+{
+    float time = 0.0f;
+    for (int i = 0;i < warmup; ++i) {
+        func();
+    }
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
+    for (int i = 0; i < repeats; ++i) {
+        func();
+    }
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+    return time/repeats;
+}
+
 int main()
 {
     constexpr int N = 10000000;
     float* ha, *hb, *hc;
     float* da, *db, *dc;
     constexpr int BLOCK_SIZE = 256;
-    int GRID_SIZE = CEIL(N, BLOCK_SIZE);
+    int GRID_SIZE = CEIL(N / 4, BLOCK_SIZE);
     ha = (float*)malloc(N * sizeof(float));
     hb = (float*)malloc(N * sizeof(float));
     hc = (float*)malloc(N * sizeof(float));
@@ -52,18 +74,7 @@ int main()
     cudaCheck(cudaMemcpy(da, ha, N * sizeof(float), cudaMemcpyHostToDevice));
     cudaCheck(cudaMemcpy(db, hb, N * sizeof(float), cudaMemcpyHostToDevice));
 
-    cudaEvent_t start,stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start);
-
     vector_add_float4<<<GRID_SIZE, BLOCK_SIZE>>>(da, db, dc, N);
-
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    float time;
-    cudaEventElapsedTime(&time, start, stop);
-    printf("time: %f ms\n", time);
 
     float* hc_gpu = (float*)malloc(N * sizeof(float));
     cudaCheck(cudaMemcpy(hc_gpu, dc, N * sizeof(float), cudaMemcpyDeviceToHost));
@@ -80,6 +91,10 @@ int main()
     } else {
         printf("test failed\n");
     }
+
+    auto vector_add2_kernel = [&](){vector_add_float4<<<GRID_SIZE, BLOCK_SIZE>>>(da, db, dc, N);};
+    float time = benchmark_kernel(vector_add2_kernel, 5, 3);
+    printf("time=%f\n", time);
     free(ha);
     free(hb);
     free(hc);

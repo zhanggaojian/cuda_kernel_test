@@ -28,6 +28,28 @@ void vector_add_cpu(float* a, float* b, float* c,  int n)
     }
 }
 
+template<typename T>
+float benchmark_kernel(T func, int repeats, int warmup=1)
+{
+    float time = 0.0f;
+    for (int i = 0;i < warmup; ++i) {
+        func();
+    }
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
+    for (int i = 0; i < repeats; ++i) {
+        func();
+    }
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+    return time/repeats;
+}
+
 int main()
 {
     float *ha, *hb, *hc;
@@ -55,17 +77,9 @@ int main()
     //将host数据拷贝给device数据
     cudaCheck(cudaMemcpy(da, ha, N * sizeof(float), cudaMemcpyHostToDevice));
     cudaCheck(cudaMemcpy(db, hb, N * sizeof(float), cudaMemcpyHostToDevice));
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start);
+
     //调用kernel函数
     vector_add<<<GRID_SIZE, BLOCK_SIZE>>>(da, db, dc, N);
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
-    float time;
-    cudaEventElapsedTime(&time, start, stop);
-    printf("time: %f ms\n", time);
 
     //最终把device的结果拷贝回host，然后在host上比较数据大小
     cudaCheck(cudaMemcpy(hc, dc, N * sizeof(float), cudaMemcpyDeviceToHost));
@@ -87,6 +101,10 @@ int main()
     } else {
         printf("test failed\n");
     }
+
+    auto vector_add1_kernel = [&](){vector_add<<<GRID_SIZE, BLOCK_SIZE>>>(da, db, dc, N);};
+    float time = benchmark_kernel(vector_add1_kernel, 5, 3);
+    printf("time=%f\n", time);
 
     free(ha);
     free(hb);
