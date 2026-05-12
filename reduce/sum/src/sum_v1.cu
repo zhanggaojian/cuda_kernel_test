@@ -2,7 +2,7 @@
 #include <iostream>
 #define CEIL(a, b) (a+b-1)/b
 
-void sum_cpu(float *hin, float *hout, int n)
+void sum_cpu(const float *hin, double *hout, int n)
 {
     double sum = 0.0f;
     for (int i = 0;i < n; ++i) {
@@ -11,8 +11,13 @@ void sum_cpu(float *hin, float *hout, int n)
     *hout = sum;
 }
 
-bool check_result(float hin, float din) {
-    if (abs(hin - din) > 1e-6) {
+bool check_result(const double hin, const double din) {
+    double atol = 1e-6;
+    double rtol = 1e-6;
+
+    double abs_diff = std::fabs(hin - din);
+    double diff = atol + rtol * std::max(std::fabs(hin), std::fabs(din));
+    if (abs_diff > diff) {
         printf("result err, hin=%f, din=%f\n", hin, din);
         return false;
     }
@@ -26,7 +31,7 @@ __global__ void sum_v1(float *din, float *dout, int n)
     int tid = threadIdx.x; //tid in current block
     __shared__ float shm[blockSize]; //shm in every block
      //shm[tid] = din[gtid]; //gtid element global index
-    shm[tid] = gtid < n ? din[tid] : 0.0f;
+    shm[tid] = gtid < n ? din[gtid] : 0.0f;
     __syncthreads(); //all threads in one block
     //这里是在block内对所有元素做归约，也是两两求和，每次求和
     //问题来了，每次求和的两个元素的index之间的offset是多少呢
@@ -78,11 +83,12 @@ int main()
     const int GRID_SIZE = std::min(CEIL(N, BLOCK_SIZE), deviceProp.maxGridSize[0]);
     dim3 grid_size(GRID_SIZE);
     dim3 block_size(BLOCK_SIZE);
-    float *hin, *hout;
+    float *hin;
+    double *hout;
     float *din, *dout;
     hin = (float*)malloc(N * sizeof(float));
-    hout = (float*)malloc(1 * sizeof(float));
-    memset(hout, 0, sizeof(float));
+    hout = (double*)malloc(1 * sizeof(double));
+    memset(hout, 0, sizeof(double));
     cudaMalloc((void**)&din, N * sizeof(float));
     cudaMalloc((void**)&dout, GRID_SIZE * sizeof(float));
     cudaMemset(dout, 0, sizeof(float));
@@ -95,7 +101,7 @@ int main()
     memset(dout_cpu, 0, sizeof(float));
     sum_cpu(hin, hout, N);
     cudaMemcpy(dout_cpu, dout, GRID_SIZE * sizeof(float), cudaMemcpyDeviceToHost);
-    float sum_cpu;
+    double sum_cpu = 0.0f;
     for (int i = 0;i < GRID_SIZE; ++i) {
         sum_cpu += dout_cpu[i];
     }

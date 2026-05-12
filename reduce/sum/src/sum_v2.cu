@@ -1,9 +1,12 @@
 #include <cuda_runtime.h>
 #include <iostream>
+#include <cmath>
+#include <cstring>
+#include <algorithm>
 
 #define CEIL(a,b) (a+b-1)/b
 
-void sum_cpu(float *hin, float *hout, int n)
+void sum_cpu(const float *hin, double *hout, int n)
 {
     double sum = 0.0;
     for (int i = 0;i < n; ++i) {
@@ -12,9 +15,13 @@ void sum_cpu(float *hin, float *hout, int n)
     *hout = sum;
 }
 
-bool check_result(float hin, float din)
+bool check_result(const double hin, const double din)
 {
-    if (abs(hin - din) > 1e-6) {
+    double atol = 1e-6;
+    double rtol = 1e-6;
+    double abs_diff = std::fabs(hin - din);
+    double diff = atol + rtol * std::max(std::fabs(hin), std::fabs(din));
+    if (abs_diff > diff) {
         printf("result err, hin = %f, din = %f\n", hin, din);
         return false;
     }
@@ -22,7 +29,7 @@ bool check_result(float hin, float din)
 }
 
 template<int blockSize>
-__global__ void sum_v2(float *din, float *dout, int n)
+__global__ void sum_v2(const float *din, float *dout, const int n)
 {
     int tid = threadIdx.x;
     int gtid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -73,16 +80,17 @@ int main()
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, 0);
     int GRID_SIZE = std::min(CEIL(N, BLOCK_SIZE), deviceProp.maxGridSize[0]);
-    float *hin, *hout;
+    float *hin;
+    double *hout;
     float *din, *dout;
     dim3 grid_size(GRID_SIZE);
     dim3 block_size(BLOCK_SIZE);
     hin = (float*)malloc(N * sizeof(float));
-    hout = (float*)malloc(1 * sizeof(float));
+    hout = (double*)malloc(1 * sizeof(double));
     for (int i = 0; i < N; ++i) {
         hin[i] = i % BLOCK_SIZE;
     }
-    memset(hout, 0, sizeof(float));
+    memset(hout, 0, sizeof(double));
     cudaMalloc((void**)&din, N * sizeof(float));
     cudaMalloc((void**)&dout, GRID_SIZE * sizeof(float));
     cudaMemcpy(din, hin, N * sizeof(float), cudaMemcpyHostToDevice);
