@@ -42,7 +42,11 @@ __global__ void sum_v4(float *din, float *dout, int n)
     int warpId = tid / warpSize;
     int laneId = tid % warpSize;
     
-    float val = gtid < n ? din[gtid] : 0.0f; //current val in current warp
+    // float val = gtid < n ? din[gtid] : 0.0f; //current val in current warp
+    float val = 0.0f;
+    for (int i = gtid; i < n; i+=gridDim.x * blockDim.x) {
+        val += din[i];
+    }
 #pragma unroll
     for (int i = warpSize / 2; i > 0; i >>= 1) {
         val += __shfl_down_sync(0xffffffff, val, i);
@@ -100,7 +104,8 @@ int main()
     cudaSetDevice(0);
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, 0);
-    const int GRID_SIZE = std::min(CEIL(N, BLOCK_SIZE), deviceProp.maxGridSize[0]);
+    // const int GRID_SIZE = std::min(CEIL(N, BLOCK_SIZE), deviceProp.maxGridSize[0]);
+    const int GRID_SIZE = deviceProp.multiProcessorCount * 8;
     float *hin, *din, *dout, *dout_cpu;
     hin = (float*)malloc(N * sizeof(float));
     for (int i = 0; i < N; ++i) {

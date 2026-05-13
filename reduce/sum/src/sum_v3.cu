@@ -1,9 +1,12 @@
 #include <iostream>
 #include <cuda_runtime.h>
+#include <cstring>
+#include <cmath>
+#include <algorithm>
 
 #define CEIL(a,b) (a+b-1)/b
 
-void sum_cpu(float *hin, double *hout, int n)
+void sum_cpu(const float *hin, double *hout, const int n)
 {
     double sum = 0.0;
     for (int i = 0;i < n; ++i) {
@@ -12,13 +15,17 @@ void sum_cpu(float *hin, double *hout, int n)
     *hout = sum;
 }
 
-bool check_result(double hin, float *din, int n)
+bool check_result(const double hin, const float *din, const int n)
 {
     double sum = 0.0;
     for (int i = 0;i < n;++i) {
         sum += din[i];
     }
-    if (abs(hin - sum) > 1e-6) {
+    double atol = 1e-6;
+    double rtol = 1e-6;
+    double abs_diff = std::fabs(hin - sum);
+    double diff = atol + rtol * std::max(std::fabs(hin), std::fabs(sum));
+    if (abs_diff > diff) {
         printf("result err, hin=%f, din=%f\n", hin, sum);
         return false;
     }
@@ -26,7 +33,7 @@ bool check_result(double hin, float *din, int n)
 }
 
 template<int blockSize, int warpSize>
-__global__ void sum_v3(float *din, float *dout, int n)
+__global__ void sum_v3(const float *din, float *dout, const int n)
 {
     constexpr int WARP_NUMS = blockSize / warpSize;
     __shared__ float shm[WARP_NUMS];
@@ -95,11 +102,9 @@ int main()
     int GRID_SIZE = std::min(CEIL(N, BLOCK_SIZE), deviceProp.maxGridSize[0]);
     dim3 grid_size(GRID_SIZE);
     dim3 block_size(BLOCK_SIZE);
-    float *hin, *hout;
+    float *hin;
     float *din, *dout;
     hin = (float*)malloc(N * sizeof(float));
-    hout = (float*)malloc(sizeof(float));
-    memset(hout, 0, sizeof(float));
     for (int i = 0;i < N;++i) {
         hin[i] = i % BLOCK_SIZE;
     }
@@ -126,7 +131,7 @@ int main()
     cudaFree(din);
     cudaFree(dout);
     free(hin);
-    free(hout);
     free(dout_cpu);
+    free(sum_host);
     return 0;
 }
