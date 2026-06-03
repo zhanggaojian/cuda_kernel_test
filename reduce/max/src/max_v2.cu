@@ -1,5 +1,6 @@
 #include <cuda_runtime.h>
 #include <iostream>
+#include <cfloat>
 
 #define CEIL(a,b) (a+b-1) / b
 
@@ -33,7 +34,7 @@ __global__ void max_v2(const float *din, float *dout, int n)
     int warpId = tid / warpSize;
     int laneId = tid % warpSize;
 
-    float val = gtid < n ? din[gtid] : 0.0;
+    float val = gtid < n ? din[gtid] : -FLT_MAX;
     for (int i = warpSize / 2; i > 0; i >>= 1) {
         val = fmaxf(val, __shfl_down_sync(0xffffffff, val, i));
     }
@@ -41,9 +42,10 @@ __global__ void max_v2(const float *din, float *dout, int n)
     if (laneId == 0) {
         shm[warpId] = val; 
     }
+    __syncthreads();
 
     if (warpId == 0) {
-        val = laneId < warpSize ? shm[laneId] : 0.0;
+        val = laneId < WARP_NUMS ? shm[laneId] : -FLT_MAX;
         for (int i = warpSize / 2; i > 0; i >>= 1) {
             val = fmaxf(val, __shfl_down_sync(0xffffffff, val, i));
         }
@@ -57,7 +59,7 @@ template<typename T>
 float benchmark_kernel(T func, int repeats, int warmup = 1)
 {
     float time = 0.0f;
-    if (repeats < 0) return time;
+    if (repeats <= 0) return time;
     for (int i = 0; i < warmup; ++i) {
         func();
     }
@@ -98,7 +100,6 @@ int main()
     for (int i = 0; i < N; ++i) {
         hin[i] = i % BLOCK_SIZE + 1;
     }
-    memset(hout, hin[0], GRID_SIZE * sizeof(float));
     memset(hout_cpu, 0, sizeof(float));
     
     cudaMalloc((void**)&din, N * sizeof(float));

@@ -1,12 +1,13 @@
 #include <cuda_runtime.h>
 #include <iostream>
 #include <limits>
+#include <cfloat>
 
 #define CEIL(a,b) (a+b-1) / b
 
-void max_cpu(float *hin, float *hout, int n)
+void max_cpu(const float *hin, float *hout, const int n)
 {
-    if (n < 0) {
+    if (n <= 0) {
         printf("input is error, n=%d\n", n);
         return;
     }
@@ -17,7 +18,7 @@ void max_cpu(float *hin, float *hout, int n)
     *hout = max_res;
 }
 
-bool check_result(float *hin, float *din) {
+bool check_result(const float *hin, const float *din) {
     if (*hin == *din) {
         printf("result is ok, hin=%f, din=%f\n", *hin, *din);
         return true;
@@ -28,14 +29,14 @@ bool check_result(float *hin, float *din) {
 }
 
 template<int blockSize>
-__global__ void max_v1(float *din, float *dout, int n)
+__global__ void max_v1(const float *din, float *dout, const int n)
 {
     int gtid = blockDim.x * blockIdx.x + threadIdx.x;
     int tid = threadIdx.x;
     //每个block内都会有这样一个shm，大小就是block中线程数量的大小，每个block内部的所有线程都可以访问到。
     //blocksize指的是block内部线程数量的多少，并不是block本身的数量
     __shared__ float shm[blockSize];
-    shm[tid] = gtid < n ? din[gtid] : 0.0f;
+    shm[tid] = gtid < n ? din[gtid] : -FLT_MAX;
     __syncthreads(); //每次读写shared memory都要同步，同步是针对block中的所有线程
 
     for (int offset = blockDim.x / 2; offset > 0; offset >>= 1) {
@@ -54,7 +55,7 @@ template<typename T>
 float benchmark_kernel(T func, int repeats, int warmup = 1)
 {
     float time = 0.0f;
-    if (repeats < 0) return time;
+    if (repeats <= 0) return time;
 
     for (int i = 0;i < warmup; ++i) {
         func();
@@ -91,12 +92,11 @@ int main()
     for (int i = 0; i < N; ++i) {
         hin[i] = i % BLOCK_SIZE;
     }
-    memset(hout, hin[0], GRID_SIZE * sizeof(float));
     memset(hout_cpu, 0, sizeof(float));
 
     cudaMalloc((void**)&din, N * sizeof(float));
     cudaMalloc((void**)&dout, GRID_SIZE * sizeof(float));
-    cudaMemcpy(din, hin, GRID_SIZE * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(din, hin, N * sizeof(float), cudaMemcpyHostToDevice);
 
     max_v1<BLOCK_SIZE><<<GRID_SIZE,BLOCK_SIZE>>>(din, dout, N);
     cudaMemcpy(hout, dout, GRID_SIZE * sizeof(float), cudaMemcpyDeviceToHost);
