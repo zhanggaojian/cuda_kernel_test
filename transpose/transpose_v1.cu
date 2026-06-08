@@ -48,3 +48,72 @@ __global__ void transpose_v1(const float *din, float *dout, const int m, const i
             dout[row * m + col] = shm[threadIdx.x][i];
     }
 }
+
+bool check_result(const float *din, const float *din_cpu ,const int n, const int m)
+{
+    const float atol = 1e-6;
+    const float rtol = 1e-6;
+    for (int i = 0;i < n; ++i) {
+        for (int j = 0; j < m; ++j) {
+            int index = i * m + j;
+            float abs_diff = std::fabs(din[index] - din_cpu[index]);
+            float scale = std::max(std::fabs(din[index]), std::fabs(din_cpu[index]));
+            if (abs_diff > atol + scale * rtol) {
+                printf("res err, index = %d, din = %f, din_cpu = %f\n", index, din[index], din_cpu[index]);
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+int main()
+{
+    //matirx shape = [M, N];
+    //M 是矩阵的行，在二维坐标系中对应到y轴
+    //N 是矩阵的列，在二维坐标系中对应到x轴
+    const int M = 1000;
+    const int N = 1000;
+    const int BLOCK_SIZE = 32;
+    dim3 grid_size(CEIL(N, BLOCK_SIZE), CEIL(M, BLOCK_SIZE));
+    dim3 block_size(BLOCK_SIZE, 8);
+
+    float *hin, *hout;
+    float *din, *dout;
+    hin = (float*)malloc(M * N * sizeof(float));
+    hout = (float*)malloc(N * M * sizeof(float));
+    for (int i = 0;i < M; ++i) {
+        for (int j = 0; j < N; ++j) {
+            int index = i * N  + j;
+            hin[index] = index + 1;
+        }
+    }
+
+    cudaCheck(cudaMalloc((void**)&din, M * N * sizeof(float)));
+    cudaCheck(cudaMalloc((void**)&dout, N * M * sizeof(float)));
+
+    cudaCheck(cudaMemcpy(din, hin, M * N * sizeof(float), cudaMemcpyHostToDevice));
+    
+    transpose_v1<8, BLOCK_SIZE><<<grid_size, block_size>>>(din, dout, M, N);
+    cudaCheck(cudaGetLastError());
+
+    cudaCheck(cudaMemcpy(hout, dout, N * M *sizeof(float), cudaMemcpyDeviceToHost));
+
+    float *dout_cpu = (float*)malloc(N * M * sizeof(float));
+    transpose_cpu(hin, dout_cpu, M, N);
+
+    if (check_result(dout_cpu, hout, N, M)) {
+        printf("tets passed!\n");
+    } else {
+        printf("test failed!\n");
+    }
+
+    cudaFree(din);
+    cudaFree(dout);
+
+    free(hin);
+    free(hout);
+    free(dout_cpu);
+
+    return 0;
+}
